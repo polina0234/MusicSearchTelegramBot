@@ -32,13 +32,28 @@ class Program
 
     private static async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken ct)
     {
-        if (update.Message?.Text is string msg && msg.StartsWith("/"))
+        if (update.Message?.Text is string msg)
         {
-            await HandleCommand(update.Message.Chat.Id, msg, ct);
-        }
-        else if (update.Message?.Text is string query)
-        {
-            await SearchMusic(update.Message.Chat.Id, query, 0, ct);
+            if (msg == "/start")
+            {
+                await ShowMainMenu(update.Message.Chat.Id, ct);
+            }
+            else if (msg == "🔍 Пошук музики" || msg == "Пошук музики")
+            {
+                await bot.SendMessage(update.Message.Chat.Id, "Введіть назву пісні або виконавця:", cancellationToken: ct);
+            }
+            else if (msg == "⭐ Мої улюблені" || msg == "Мої улюблені")
+            {
+                await ShowFavorites(update.Message.Chat.Id, ct);
+            }
+            else if (msg == "📋 Допомога" || msg == "Допомога")
+            {
+                await bot.SendMessage(update.Message.Chat.Id, "Просто надішліть мені назву пісні або виконавця, і я знайду її. Також ви можете додавати треки в обране та переглядати їх.", cancellationToken: ct);
+            }
+            else
+            {
+                await SearchMusic(update.Message.Chat.Id, msg, 0, ct);
+            }
         }
         else if (update.CallbackQuery != null)
         {
@@ -46,32 +61,17 @@ class Program
         }
     }
 
-    private static async Task HandleCommand(long chatId, string command, CancellationToken ct)
+    private static async Task ShowMainMenu(long chatId, CancellationToken ct)
     {
-        if (command == "/start")
+        var keyboard = new ReplyKeyboardMarkup(new[]
         {
-            var keyboard = new ReplyKeyboardMarkup(new[]
-            {
-            new KeyboardButton[] { " Пошук музики", " Мої улюблені" },
-            new KeyboardButton[] { " Допомога" }
+            new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
+            new KeyboardButton[] { "📋 Допомога" }
         })
-            {
-                ResizeKeyboard = true
-            };
-            await bot.SendMessage(chatId, "Вітаю! Я бот для пошуку музики. Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
-        }
-        else if (command == " Пошук музики")
         {
-            await bot.SendMessage(chatId, "Введіть назву пісні або виконавця:", cancellationToken: ct);
-        }
-        else if (command == " Мої улюблені")
-        {
-            await ShowFavorites(chatId, ct);
-        }
-        else if (command == " Допомога")
-        {
-            await bot.SendMessage(chatId, "Просто надішліть мені назву пісні або виконавця, і я знайду її. Також ви можете додавати треки в обране та переглядати їх.", cancellationToken: ct);
-        }
+            ResizeKeyboard = true
+        };
+        await bot.SendMessage(chatId, "Вітаю! Я бот для пошуку музики. Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
     }
 
     private static async Task SearchMusic(long chatId, string query, int page, CancellationToken ct)
@@ -90,7 +90,6 @@ class Program
                 return;
             }
 
-            // Зберігаємо результати для користувача
             _searchStates[chatId] = new UserSearchState
             {
                 Query = query,
@@ -116,23 +115,22 @@ class Program
 
                 if (!string.IsNullOrEmpty(videoId))
                 {
-                    row.Add(InlineKeyboardButton.WithUrl($" {artist} - {title}", $"https://youtu.be/{videoId}"));
+                    row.Add(InlineKeyboardButton.WithUrl($"🎧 {artist} - {title}", $"https://youtu.be/{videoId}"));
                 }
 
                 row.Add(InlineKeyboardButton.WithCallbackData("⭐ Додати", $"add_{videoId}_{title}_{artist}"));
                 inlineKeyboard.Add(row);
             }
 
-            // Кнопки пагінації
             var navRow = new List<InlineKeyboardButton>();
             if (page > 0)
                 navRow.Add(InlineKeyboardButton.WithCallbackData("⬅️ Попередня", $"page_{page - 1}_{query}"));
-            navRow.Add(InlineKeyboardButton.WithCallbackData($" {page + 1}/{totalPages}", "none"));
+            navRow.Add(InlineKeyboardButton.WithCallbackData($"📄 {page + 1}/{totalPages}", "none"));
             if (page < totalPages - 1)
                 navRow.Add(InlineKeyboardButton.WithCallbackData("➡️ Наступна", $"page_{page + 1}_{query}"));
             inlineKeyboard.Add(navRow);
 
-            string message = $" Результати пошуку \"{query}\" (стор. {page + 1}/{totalPages}):\n\n";
+            string message = $"🔍 Результати пошуку \"{query}\" (стор. {page + 1}/{totalPages}):\n\n";
             await bot.SendMessage(chatId, message, replyMarkup: new InlineKeyboardMarkup(inlineKeyboard), cancellationToken: ct);
         }
         catch (Exception ex)
@@ -153,15 +151,7 @@ class Program
             var parts = data.Split('_');
             int page = int.Parse(parts[1]);
             string query = string.Join("_", parts.Skip(2));
-
-            if (_searchStates.ContainsKey(chatId) && _searchStates[chatId].Query == query)
-            {
-                await SearchMusic(chatId, query, page, ct);
-            }
-            else
-            {
-                await SearchMusic(chatId, query, page, ct);
-            }
+            await SearchMusic(chatId, query, page, ct);
         }
         else if (data.StartsWith("add_"))
         {
@@ -169,7 +159,6 @@ class Program
             string videoId = parts[1];
             string title = parts[2];
             string artist = parts[3];
-
             await AddToFavorites(chatId, videoId, title, artist, ct);
         }
         else if (data.StartsWith("remove_"))
@@ -177,38 +166,24 @@ class Program
             int id = int.Parse(data.Split('_')[1]);
             await RemoveFromFavorites(chatId, id, ct);
         }
-        else if (data == "none")
-        {
-            // пуста кнопка
-        }
     }
 
     private static async Task AddToFavorites(long chatId, string videoId, string title, string artist, CancellationToken ct)
     {
         try
         {
-            var favorite = new
-            {
-                videoId = videoId,
-                title = title,
-                artist = artist
-            };
-
+            var favorite = new { videoId, title, artist };
             var content = new StringContent(JsonConvert.SerializeObject(favorite), Encoding.UTF8, "application/json");
             var response = await http.PostAsync(favoritesApiUrl, content);
 
             if (response.IsSuccessStatusCode)
-            {
-                await bot.SendMessage(chatId, $" Додано в обране: {artist} - {title}", cancellationToken: ct);
-            }
+                await bot.SendMessage(chatId, $"✅ Додано: {artist} - {title}", cancellationToken: ct);
             else
-            {
-                await bot.SendMessage(chatId, $" Помилка додавання: {response.StatusCode}", cancellationToken: ct);
-            }
+                await bot.SendMessage(chatId, $"❌ Помилка: {response.StatusCode}", cancellationToken: ct);
         }
         catch (Exception ex)
         {
-            await bot.SendMessage(chatId, $" Помилка: {ex.Message}", cancellationToken: ct);
+            await bot.SendMessage(chatId, $"❌ Помилка: {ex.Message}", cancellationToken: ct);
         }
     }
 
@@ -219,7 +194,7 @@ class Program
             var response = await http.GetAsync(favoritesApiUrl);
             if (!response.IsSuccessStatusCode)
             {
-                await bot.SendMessage(chatId, "Не вдалося отримати список улюблених.", cancellationToken: ct);
+                await bot.SendMessage(chatId, "Не вдалося отримати список.", cancellationToken: ct);
                 return;
             }
 
@@ -228,7 +203,7 @@ class Program
 
             if (favorites.Count == 0)
             {
-                await bot.SendMessage(chatId, "У вас ще немає улюблених пісень. Додайте їх під час пошуку!", cancellationToken: ct);
+                await bot.SendMessage(chatId, "У вас немає улюблених пісень.", cancellationToken: ct);
                 return;
             }
 
@@ -240,12 +215,11 @@ class Program
                 string artist = fav.Value<string>("artist");
                 string videoId = fav.Value<string>("videoId");
 
-                var row = new List<InlineKeyboardButton>
+                inlineKeyboard.Add(new List<InlineKeyboardButton>
                 {
-                    InlineKeyboardButton.WithUrl($"{artist} - {title}", $"https://youtu.be/{videoId}"),
+                    InlineKeyboardButton.WithUrl($"🎧 {artist} - {title}", $"https://youtu.be/{videoId}"),
                     InlineKeyboardButton.WithCallbackData("❌ Видалити", $"remove_{id}")
-                };
-                inlineKeyboard.Add(row);
+                });
             }
 
             await bot.SendMessage(chatId, "⭐ Ваші улюблені пісні:", replyMarkup: new InlineKeyboardMarkup(inlineKeyboard), cancellationToken: ct);
@@ -261,20 +235,19 @@ class Program
         try
         {
             var response = await http.DeleteAsync($"{favoritesApiUrl}/{id}");
-
             if (response.IsSuccessStatusCode)
             {
-                await bot.SendMessage(chatId, " Видалено з обраного!", cancellationToken: ct);
+                await bot.SendMessage(chatId, "✅ Видалено!", cancellationToken: ct);
                 await ShowFavorites(chatId, ct);
             }
             else
             {
-                await bot.SendMessage(chatId, $" Помилка видалення: {response.StatusCode}", cancellationToken: ct);
+                await bot.SendMessage(chatId, $"❌ Помилка видалення: {response.StatusCode}", cancellationToken: ct);
             }
         }
         catch (Exception ex)
         {
-            await bot.SendMessage(chatId, $" Помилка: {ex.Message}", cancellationToken: ct);
+            await bot.SendMessage(chatId, $"❌ Помилка: {ex.Message}", cancellationToken: ct);
         }
     }
 
