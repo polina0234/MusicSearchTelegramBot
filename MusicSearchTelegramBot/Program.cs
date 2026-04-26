@@ -50,17 +50,17 @@ class Program
     {
         if (command == "/start")
         {
-            var keyboard = new ReplyKeyboardMarkup(new List<List<KeyboardButton>>
-{
-    new List<KeyboardButton> { " Пошук музики", " Мої улюблені" },
-    new List<KeyboardButton> { " Допомога" }
-})
+            var keyboard = new ReplyKeyboardMarkup(new[]
+            {
+            new KeyboardButton[] { " Пошук музики", " Мої улюблені" },
+            new KeyboardButton[] { " Допомога" }
+        })
             {
                 ResizeKeyboard = true
             };
             await bot.SendMessage(chatId, "Вітаю! Я бот для пошуку музики. Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
         }
-        else if (command == "Пошук музики")
+        else if (command == " Пошук музики")
         {
             await bot.SendMessage(chatId, "Введіть назву пісні або виконавця:", cancellationToken: ct);
         }
