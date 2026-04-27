@@ -122,7 +122,6 @@ class Program
                     row.Add(InlineKeyboardButton.WithCallbackData($"❌ {artist} - {title}", "none"));
                 }
 
-                // ВИПРАВЛЕНО: передаємо тільки videoId
                 row.Add(InlineKeyboardButton.WithCallbackData("⭐ Додати", $"add_{videoId}"));
                 inlineKeyboard.Add(row);
             }
@@ -155,7 +154,7 @@ class Program
 
         if (data == "none") return;
 
-        if (data.StartsWith("page_"))  // ← ОСЬ ЦЕЙ РЯДОК ВСТАВИТИ
+        if (data.StartsWith("page_"))
         {
             var parts = data.Split('_');
             if (parts.Length < 3) return;
@@ -193,7 +192,12 @@ class Program
         {
             var favorite = new { videoId, title, artist };
             var content = new StringContent(JsonConvert.SerializeObject(favorite), Encoding.UTF8, "application/json");
-            var response = await http.PostAsync(favoritesApiUrl, content);
+
+            var request = new HttpRequestMessage(HttpMethod.Post, favoritesApiUrl);
+            request.Headers.Add("X-UserId", chatId.ToString());
+            request.Content = content;
+
+            var response = await http.SendAsync(request);
 
             if (response.IsSuccessStatusCode)
                 await bot.SendMessage(chatId, $"✅ Додано: {artist} - {title}", cancellationToken: ct);
@@ -210,7 +214,10 @@ class Program
     {
         try
         {
-            var response = await http.GetAsync(favoritesApiUrl);
+            var request = new HttpRequestMessage(HttpMethod.Get, favoritesApiUrl);
+            request.Headers.Add("X-UserId", chatId.ToString());
+            var response = await http.SendAsync(request);
+
             if (!response.IsSuccessStatusCode)
             {
                 await bot.SendMessage(chatId, "Не вдалося отримати список.", cancellationToken: ct);
@@ -253,7 +260,10 @@ class Program
     {
         try
         {
-            var response = await http.DeleteAsync($"{favoritesApiUrl}/{id}");
+            var request = new HttpRequestMessage(HttpMethod.Delete, $"{favoritesApiUrl}/{id}");
+            request.Headers.Add("X-UserId", chatId.ToString());
+            var response = await http.SendAsync(request);
+
             if (response.IsSuccessStatusCode)
             {
                 await bot.SendMessage(chatId, "✅ Видалено!", cancellationToken: ct);
