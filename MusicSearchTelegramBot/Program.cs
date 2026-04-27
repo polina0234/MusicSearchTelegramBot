@@ -155,7 +155,7 @@ class Program
 
         if (data == "none") return;
 
-        if (data.StartsWith("page_"))
+        if (data.StartsWith("page_"))  // ← ОСЬ ЦЕЙ РЯДОК ВСТАВИТИ
         {
             var parts = data.Split('_');
             if (parts.Length < 3) return;
@@ -167,7 +167,6 @@ class Program
         {
             string videoId = data.Replace("add_", "");
 
-            // Шукаємо пісню в збережених результатах
             if (_searchStates.TryGetValue(chatId, out var state))
             {
                 var song = state.Results.FirstOrDefault(s => s.videoId == videoId);
