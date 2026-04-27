@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -33,53 +32,45 @@ class Program
 
     private static async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken ct)
     {
-        // Обробка callback-запитів від кнопок
         if (update.CallbackQuery != null)
         {
             await HandleCallback(update.CallbackQuery, ct);
             return;
         }
 
-        // Обробка текстових повідомлень
         if (update.Message?.Text is string msg)
         {
             long chatId = update.Message.Chat.Id;
 
             if (msg == "/start")
             {
-                await ShowMainMenu(chatId, ct);
+                var keyboard = new ReplyKeyboardMarkup(new[]
+                {
+                    new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
+                    new KeyboardButton[] { "📋 Допомога" }
+                })
+                {
+                    ResizeKeyboard = true
+                };
+                await bot.SendMessage(chatId, "Вітаю! Я бот для пошуку музики. Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
             }
-            else if (msg == "🔍 Пошук музики")
+            else if (msg == "🔍 Пошук музики" || msg == "Пошук музики")
             {
                 await bot.SendMessage(chatId, "Введіть назву пісні або виконавця:", cancellationToken: ct);
             }
-            else if (msg == "⭐ Мої улюблені")
+            else if (msg == "⭐ Мої улюблені" || msg == "Мої улюблені")
             {
                 await ShowFavorites(chatId, ct);
             }
-            else if (msg == "📋 Допомога")
+            else if (msg == "📋 Допомога" || msg == "Допомога")
             {
-                await bot.SendMessage(chatId, "Просто надішліть мені назву пісні або виконавця, і я знайду її.", cancellationToken: ct);
+                await bot.SendMessage(chatId, "Надішліть назву пісні або виконавця для пошуку.", cancellationToken: ct);
             }
             else
             {
-                // Це звичайний пошуковий запит
                 await SearchMusic(chatId, msg, 0, ct);
             }
         }
-    }
-
-    private static async Task ShowMainMenu(long chatId, CancellationToken ct)
-    {
-        var keyboard = new ReplyKeyboardMarkup(new[]
-        {
-            new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
-            new KeyboardButton[] { "📋 Допомога" }
-        })
-        {
-            ResizeKeyboard = true
-        };
-        await bot.SendMessage(chatId, "Вітаю! Я бот для пошуку музики. Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
     }
 
     private static async Task SearchMusic(long chatId, string query, int page, CancellationToken ct)
@@ -91,14 +82,21 @@ class Program
             string url = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(query)}";
             string json = await http.GetStringAsync(url);
 
-            // Десеріалізація масиву (бо API повертає [{...}, {...}])
-            var songs = JsonConvert.DeserializeObject<Class1[]>(json);
+            var result = JsonConvert.DeserializeObject<Rootobject>(json);
+            var songs = result.Property1;
 
             if (songs == null || songs.Length == 0)
             {
                 await bot.SendMessage(chatId, "Нічого не знайдено.", cancellationToken: ct);
                 return;
             }
+
+            _searchStates[chatId] = new UserSearchState
+            {
+                Query = query,
+                Results = songs,
+                CurrentPage = page
+            };
 
             int pageSize = 5;
             int totalPages = (int)Math.Ceiling((double)songs.Length / pageSize);
@@ -148,6 +146,8 @@ class Program
         string data = callback.Data;
 
         await bot.AnswerCallbackQuery(callback.Id, cancellationToken: ct);
+
+        if (data == "none") return;
 
         if (data.StartsWith("page_"))
         {
@@ -264,6 +264,6 @@ class Program
 public class UserSearchState
 {
     public string Query { get; set; }
-    public JArray Results { get; set; }
+    public Class1[] Results { get; set; }
     public int CurrentPage { get; set; }
 }
