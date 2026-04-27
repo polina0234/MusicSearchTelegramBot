@@ -46,23 +46,21 @@ class Program
             {
                 var keyboard = new ReplyKeyboardMarkup(new[]
                 {
-                    new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
-                    new KeyboardButton[] { "📋 Допомога" }
-                })
-                {
-                    ResizeKeyboard = true
-                };
-                await bot.SendMessage(chatId, "Вітаю! Я бот для пошуку музики. Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
+                new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
+                new KeyboardButton[] { "📋 Допомога" }
+            })
+                { ResizeKeyboard = true };
+                await bot.SendMessage(chatId, "Вітаю! Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
             }
-            else if (msg == "🔍 Пошук музики" || msg == "Пошук музики")
+            else if (msg == "🔍 Пошук музики")
             {
                 await bot.SendMessage(chatId, "Введіть назву пісні або виконавця:", cancellationToken: ct);
             }
-            else if (msg == "⭐ Мої улюблені" || msg == "Мої улюблені")
+            else if (msg == "⭐ Мої улюблені")
             {
                 await ShowFavorites(chatId, ct);
             }
-            else if (msg == "📋 Допомога" || msg == "Допомога")
+            else if (msg == "📋 Допомога")
             {
                 await bot.SendMessage(chatId, "Надішліть назву пісні або виконавця для пошуку.", cancellationToken: ct);
             }
