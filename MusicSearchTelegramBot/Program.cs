@@ -82,8 +82,7 @@ class Program
             string url = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(query)}";
             string json = await http.GetStringAsync(url);
 
-            var result = JsonConvert.DeserializeObject<Rootobject>(json);
-            var songs = result.Property1;
+            var songs = JsonConvert.DeserializeObject<Class1[]>(json);
 
             if (songs == null || songs.Length == 0)
             {
@@ -118,6 +117,10 @@ class Program
                 {
                     row.Add(InlineKeyboardButton.WithUrl($"🎧 {artist} - {title}", $"https://youtu.be/{videoId}"));
                 }
+                else
+                {
+                    row.Add(InlineKeyboardButton.WithCallbackData($"❌ {artist} - {title}", "none"));
+                }
 
                 row.Add(InlineKeyboardButton.WithCallbackData("⭐ Додати", $"add_{videoId}_{title}_{artist}"));
                 inlineKeyboard.Add(row);
@@ -142,6 +145,8 @@ class Program
 
     private static async Task HandleCallback(CallbackQuery callback, CancellationToken ct)
     {
+        if (callback.Message == null || callback.Data == null) return;
+
         long chatId = callback.Message.Chat.Id;
         string data = callback.Data;
 
@@ -152,6 +157,7 @@ class Program
         if (data.StartsWith("page_"))
         {
             var parts = data.Split('_');
+            if (parts.Length < 3) return;
             int page = int.Parse(parts[1]);
             string query = string.Join("_", parts.Skip(2));
             await SearchMusic(chatId, query, page, ct);
@@ -159,6 +165,7 @@ class Program
         else if (data.StartsWith("add_"))
         {
             var parts = data.Split('_');
+            if (parts.Length < 4) return;
             string videoId = parts[1];
             string title = parts[2];
             string artist = parts[3];
@@ -166,7 +173,9 @@ class Program
         }
         else if (data.StartsWith("remove_"))
         {
-            int id = int.Parse(data.Split('_')[1]);
+            var parts = data.Split('_');
+            if (parts.Length < 2) return;
+            int id = int.Parse(parts[1]);
             await RemoveFromFavorites(chatId, id, ct);
         }
     }
