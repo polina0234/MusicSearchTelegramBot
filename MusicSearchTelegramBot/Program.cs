@@ -32,6 +32,7 @@ class Program
 
     private static async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken ct)
     {
+        Console.WriteLine(JsonConvert.SerializeObject(update));
         if (update.CallbackQuery != null)
         {
             await HandleCallback(update.CallbackQuery, ct);
