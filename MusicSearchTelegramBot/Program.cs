@@ -68,7 +68,7 @@ class Program
             }
             else if (msg.Contains("Допомога"))
             {
-                await bot.SendMessage(chatId, "Просто введи назву пісні 👍", cancellationToken: ct);
+                await bot.SendMessage(chatId, "Просто введи назву пісні або виконавця! :Р", cancellationToken: ct);
             }
             else
             {
