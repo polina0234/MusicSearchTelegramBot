@@ -89,6 +89,7 @@ class Program
 
             string url = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(query)}";
             string json = await http.GetStringAsync(url);
+            Console.WriteLine(json); 
             JArray songs = JArray.Parse(json);
 
             if (songs.Count == 0)
