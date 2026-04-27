@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -89,35 +90,30 @@ class Program
 
             string url = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(query)}";
             string json = await http.GetStringAsync(url);
-            Console.WriteLine(json); 
-            JArray songs = JArray.Parse(json);
 
-            if (songs.Count == 0)
+            // Десеріалізація через класи
+            var searchResult = JsonConvert.DeserializeObject<Rootobject>(json);
+            var songs = searchResult.Property1; // масив Class1[]
+
+            if (songs == null || songs.Length == 0)
             {
                 await bot.SendMessage(chatId, "Нічого не знайдено.", cancellationToken: ct);
                 return;
             }
 
-            _searchStates[chatId] = new UserSearchState
-            {
-                Query = query,
-                Results = songs,
-                CurrentPage = page
-            };
-
             int pageSize = 5;
-            int totalPages = (int)Math.Ceiling((double)songs.Count / pageSize);
+            int totalPages = (int)Math.Ceiling((double)songs.Length / pageSize);
             int start = page * pageSize;
-            int end = Math.Min(start + pageSize, songs.Count);
+            int end = Math.Min(start + pageSize, songs.Length);
 
             var inlineKeyboard = new List<List<InlineKeyboardButton>>();
 
             for (int i = start; i < end; i++)
             {
                 var song = songs[i];
-                string title = song["title"]?.ToString() ?? "Невідомо";
-                string artist = song["artists"]?[0]?["name"]?.ToString() ?? "Невідомий";
-                string videoId = song["videoId"]?.ToString();
+                string title = song.title ?? "Невідомо";
+                string artist = song.artists?[0]?.name ?? "Невідомий";
+                string videoId = song.videoId;
 
                 var row = new List<InlineKeyboardButton>();
 
