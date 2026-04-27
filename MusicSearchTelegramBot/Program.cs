@@ -116,6 +116,7 @@ class Program
                 if (!string.IsNullOrEmpty(videoId))
                 {
                     row.Add(InlineKeyboardButton.WithUrl($"🎧 {artist} - {title}", $"https://youtu.be/{videoId}"));
+                    row.Add(InlineKeyboardButton.WithCallbackData("📄 Деталі", $"details_{videoId}"));
                 }
                 else
                 {
@@ -162,6 +163,11 @@ class Program
             string query = Uri.UnescapeDataString(string.Join("_", parts.Skip(2)));
             await SearchMusic(chatId, query, page, ct);
         }
+        else if (data.StartsWith("details_"))
+        {
+            string videoId = data.Replace("details_", "");
+            await ShowDetails(chatId, videoId, ct);
+        }
         else if (data.StartsWith("add_"))
         {
             string videoId = data.Replace("add_", "");
@@ -183,6 +189,55 @@ class Program
             if (parts.Length < 2) return;
             int id = int.Parse(parts[1]);
             await RemoveFromFavorites(chatId, id, ct);
+        }
+    }
+
+    private static async Task ShowDetails(long chatId, string videoId, CancellationToken ct)
+    {
+        try
+        {
+            await bot.SendChatAction(chatId, ChatAction.Typing, cancellationToken: ct);
+
+            string url = $"{apiBaseUrl}/details/{videoId}";
+            string json = await http.GetStringAsync(url);
+
+            var details = JsonConvert.DeserializeObject<VideoDetailsResponse>(json);
+
+            if (details?.items == null || details.items.Length == 0)
+            {
+                await bot.SendMessage(chatId, "Не вдалося отримати деталі.", cancellationToken: ct);
+                return;
+            }
+
+            var video = details.items[0];
+            var snippet = video.snippet;
+
+            string duration = "Невідомо";
+            if (video.contentDetails?.duration != null)
+            {
+                duration = video.contentDetails.duration;
+                duration = duration.Replace("PT", "").Replace("H", " год ").Replace("M", " хв ").Replace("S", " сек");
+                if (duration == "") duration = "0 сек";
+            }
+
+            string viewCount = video.statistics?.viewCount ?? "Немає даних";
+            string likeCount = video.statistics?.likeCount ?? "Немає даних";
+            string commentCount = video.statistics?.commentCount ?? "Немає даних";
+
+            string message = $"📌 *{snippet.title}*\n\n" +
+                             $"🎤 Канал: {snippet.channelTitle}\n" +
+                             $"📅 Дата: {snippet.publishedAt:yyyy-MM-dd}\n" +
+                             $"⏱ Тривалість: {duration}\n" +
+                             $"👁 Переглядів: {(viewCount != "Немає даних" ? int.Parse(viewCount).ToString("N0") : "Немає даних")}\n" +
+                             $"❤️ Лайків: {(likeCount != "Немає даних" ? int.Parse(likeCount).ToString("N0") : "Немає даних")}\n" +
+                             $"💬 Коментарів: {(commentCount != "Немає даних" ? int.Parse(commentCount).ToString("N0") : "Немає даних")}\n\n" +
+                             $"🔗 [Посилання](https://youtu.be/{videoId})";
+
+            await bot.SendMessage(chatId, message, parseMode: ParseMode.Markdown, cancellationToken: ct);
+        }
+        catch (Exception ex)
+        {
+            await bot.SendMessage(chatId, $"Помилка отримання деталей: {ex.Message}", cancellationToken: ct);
         }
     }
 
@@ -292,4 +347,35 @@ public class UserSearchState
     public string Query { get; set; }
     public Class1[] Results { get; set; }
     public int CurrentPage { get; set; }
+}
+
+public class VideoDetailsResponse
+{
+    public VideoItem[] items { get; set; }
+}
+
+public class VideoItem
+{
+    public VideoSnippet snippet { get; set; }
+    public VideoContentDetails contentDetails { get; set; }
+    public VideoStatistics statistics { get; set; }
+}
+
+public class VideoSnippet
+{
+    public DateTime publishedAt { get; set; }
+    public string channelTitle { get; set; }
+    public string title { get; set; }
+}
+
+public class VideoContentDetails
+{
+    public string duration { get; set; }
+}
+
+public class VideoStatistics
+{
+    public string viewCount { get; set; }
+    public string likeCount { get; set; }
+    public string commentCount { get; set; }
 }
