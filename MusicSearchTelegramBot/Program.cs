@@ -32,7 +32,6 @@ class Program
 
     private static async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken ct)
     {
-        Console.WriteLine(JsonConvert.SerializeObject(update));
         if (update.CallbackQuery != null)
         {
             await HandleCallback(update.CallbackQuery, ct);
@@ -47,21 +46,23 @@ class Program
             {
                 var keyboard = new ReplyKeyboardMarkup(new[]
                 {
-                new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
-                new KeyboardButton[] { "📋 Допомога" }
-            })
-                { ResizeKeyboard = true };
-                await bot.SendMessage(chatId, "Вітаю! Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
+                    new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
+                    new KeyboardButton[] { "📋 Допомога" }
+                })
+                {
+                    ResizeKeyboard = true
+                };
+                await bot.SendMessage(chatId, "Вітаю! Я бот для пошуку музики. Оберіть дію:", replyMarkup: keyboard, cancellationToken: ct);
             }
-            else if (msg == "🔍 Пошук музики")
+            else if (msg == "🔍 Пошук музики" || msg == "Пошук музики")
             {
                 await bot.SendMessage(chatId, "Введіть назву пісні або виконавця:", cancellationToken: ct);
             }
-            else if (msg == "⭐ Мої улюблені")
+            else if (msg == "⭐ Мої улюблені" || msg == "Мої улюблені")
             {
                 await ShowFavorites(chatId, ct);
             }
-            else if (msg == "📋 Допомога")
+            else if (msg == "📋 Допомога" || msg == "Допомога")
             {
                 await bot.SendMessage(chatId, "Надішліть назву пісні або виконавця для пошуку.", cancellationToken: ct);
             }
@@ -121,16 +122,17 @@ class Program
                     row.Add(InlineKeyboardButton.WithCallbackData($"❌ {artist} - {title}", "none"));
                 }
 
-                row.Add(InlineKeyboardButton.WithCallbackData("⭐ Додати", $"add_{videoId}_{title}_{artist}"));
+                // ВИПРАВЛЕНО: передаємо тільки videoId
+                row.Add(InlineKeyboardButton.WithCallbackData("⭐ Додати", $"add_{videoId}"));
                 inlineKeyboard.Add(row);
             }
 
             var navRow = new List<InlineKeyboardButton>();
             if (page > 0)
-                navRow.Add(InlineKeyboardButton.WithCallbackData("⬅️ Попередня", $"page_{page - 1}_{query}"));
+                navRow.Add(InlineKeyboardButton.WithCallbackData("⬅️ Попередня", $"page_{page - 1}_{Uri.EscapeDataString(query)}"));
             navRow.Add(InlineKeyboardButton.WithCallbackData($"📄 {page + 1}/{totalPages}", "none"));
             if (page < totalPages - 1)
-                navRow.Add(InlineKeyboardButton.WithCallbackData("➡️ Наступна", $"page_{page + 1}_{query}"));
+                navRow.Add(InlineKeyboardButton.WithCallbackData("➡️ Наступна", $"page_{page + 1}_{Uri.EscapeDataString(query)}"));
             inlineKeyboard.Add(navRow);
 
             string message = $"🔍 Результати пошуку \"{query}\" (стор. {page + 1}/{totalPages}):\n\n";
@@ -158,17 +160,24 @@ class Program
             var parts = data.Split('_');
             if (parts.Length < 3) return;
             int page = int.Parse(parts[1]);
-            string query = string.Join("_", parts.Skip(2));
+            string query = Uri.UnescapeDataString(string.Join("_", parts.Skip(2)));
             await SearchMusic(chatId, query, page, ct);
         }
         else if (data.StartsWith("add_"))
         {
-            var parts = data.Split('_');
-            if (parts.Length < 4) return;
-            string videoId = parts[1];
-            string title = parts[2];
-            string artist = parts[3];
-            await AddToFavorites(chatId, videoId, title, artist, ct);
+            string videoId = data.Replace("add_", "");
+
+            // Шукаємо пісню в збережених результатах
+            if (_searchStates.TryGetValue(chatId, out var state))
+            {
+                var song = state.Results.FirstOrDefault(s => s.videoId == videoId);
+                if (song != null)
+                {
+                    string title = song.title ?? "Невідомо";
+                    string artist = song.artists?[0]?.name ?? "Невідомий";
+                    await AddToFavorites(chatId, videoId, title, artist, ct);
+                }
+            }
         }
         else if (data.StartsWith("remove_"))
         {
