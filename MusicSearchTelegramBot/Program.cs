@@ -91,9 +91,8 @@ class Program
             string url = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(query)}";
             string json = await http.GetStringAsync(url);
 
-            // Десеріалізація через класи
-            var searchResult = JsonConvert.DeserializeObject<Rootobject>(json);
-            var songs = searchResult.Property1; // масив Class1[]
+            // Десеріалізація масиву (бо API повертає [{...}, {...}])
+            var songs = JsonConvert.DeserializeObject<Class1[]>(json);
 
             if (songs == null || songs.Length == 0)
             {
