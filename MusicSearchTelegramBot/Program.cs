@@ -32,32 +32,39 @@ class Program
 
     private static async Task HandleUpdateAsync(ITelegramBotClient client, Update update, CancellationToken ct)
     {
+        // Обробка callback-запитів від кнопок
+        if (update.CallbackQuery != null)
+        {
+            await HandleCallback(update.CallbackQuery, ct);
+            return;
+        }
+
+        // Обробка текстових повідомлень
         if (update.Message?.Text is string msg)
         {
+            long chatId = update.Message.Chat.Id;
+
             if (msg == "/start")
             {
-                await ShowMainMenu(update.Message.Chat.Id, ct);
+                await ShowMainMenu(chatId, ct);
             }
-            else if (msg == "🔍 Пошук музики" || msg == "Пошук музики")
+            else if (msg == "🔍 Пошук музики")
             {
-                await bot.SendMessage(update.Message.Chat.Id, "Введіть назву пісні або виконавця:", cancellationToken: ct);
+                await bot.SendMessage(chatId, "Введіть назву пісні або виконавця:", cancellationToken: ct);
             }
-            else if (msg == "⭐ Мої улюблені" || msg == "Мої улюблені")
+            else if (msg == "⭐ Мої улюблені")
             {
-                await ShowFavorites(update.Message.Chat.Id, ct);
+                await ShowFavorites(chatId, ct);
             }
-            else if (msg == "📋 Допомога" || msg == "Допомога")
+            else if (msg == "📋 Допомога")
             {
-                await bot.SendMessage(update.Message.Chat.Id, "Просто надішліть мені назву пісні або виконавця, і я знайду її. Також ви можете додавати треки в обране та переглядати їх.", cancellationToken: ct);
+                await bot.SendMessage(chatId, "Просто надішліть мені назву пісні або виконавця, і я знайду її.", cancellationToken: ct);
             }
             else
             {
-                await SearchMusic(update.Message.Chat.Id, msg, 0, ct);
+                // Це звичайний пошуковий запит
+                await SearchMusic(chatId, msg, 0, ct);
             }
-        }
-        else if (update.CallbackQuery != null)
-        {
-            await HandleCallback(update.CallbackQuery, ct);
         }
     }
 
