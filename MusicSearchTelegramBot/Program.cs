@@ -68,7 +68,7 @@ class Program
             }
             else if (msg.Contains("Допомога"))
             {
-                await bot.SendMessage(chatId, "Просто введи назву пісні або виконавця! :Р", cancellationToken: ct);
+                await bot.SendMessage(chatId, "Просто введи назву пісні :Р", cancellationToken: ct);
             }
             else
             {
@@ -86,7 +86,11 @@ class Program
             string url = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(query)}";
             string json = await http.GetStringAsync(url);
 
-            var songs = JsonConvert.DeserializeObject<Class1[]>(json);
+            // 👇 ФІКС: відсіюємо null videoId та album/playlist
+            var allResults = JsonConvert.DeserializeObject<Class1[]>(json);
+            var songs = allResults
+                .Where(s => !string.IsNullOrEmpty(s.videoId) && s.resultType == "song")
+                .ToArray();
 
             if (songs == null || songs.Length == 0)
             {
@@ -284,7 +288,8 @@ class Program
         var favorite = new { videoId, title, artist };
 
         var request = new HttpRequestMessage(HttpMethod.Post, favoritesApiUrl);
-        request.Headers.Add("X-UserId", chatId.ToString());
+        // 👇 ФІКС: змінив X-UserId на userId (щоб API бачило)
+        request.Headers.Add("userId", chatId.ToString());
         request.Content = new StringContent(JsonConvert.SerializeObject(favorite), Encoding.UTF8, "application/json");
 
         var response = await http.SendAsync(request);
@@ -322,7 +327,11 @@ class Program
 
             string relatedUrl = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(title + " official music video")}";
             string relatedJson = await http.GetStringAsync(relatedUrl);
-            var relatedSongs = JsonConvert.DeserializeObject<Class1[]>(relatedJson);
+
+            var allResults = JsonConvert.DeserializeObject<Class1[]>(relatedJson);
+            var relatedSongs = allResults
+                .Where(s => !string.IsNullOrEmpty(s.videoId) && s.resultType == "song")
+                .ToArray();
 
             if (relatedSongs == null || relatedSongs.Length == 0)
             {
@@ -364,7 +373,8 @@ class Program
     private static async Task ShowFavorites(long chatId, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, favoritesApiUrl);
-        request.Headers.Add("X-UserId", chatId.ToString());
+        // 👇 ФІКС: змінив X-UserId на userId
+        request.Headers.Add("userId", chatId.ToString());
 
         var response = await http.SendAsync(request);
 
@@ -405,7 +415,8 @@ class Program
     private static async Task RemoveFromFavorites(long chatId, int id, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Delete, $"{favoritesApiUrl}/{id}");
-        request.Headers.Add("X-UserId", chatId.ToString());
+        // 👇 ФІКС: змінив X-UserId на userId
+        request.Headers.Add("userId", chatId.ToString());
 
         var response = await http.SendAsync(request);
 
