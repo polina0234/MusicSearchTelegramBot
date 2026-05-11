@@ -22,6 +22,7 @@ class Program
     private static readonly string favoritesApiUrl = "https://musicsearchbotapi-production.up.railway.app/api/favorites";
 
     private static readonly Dictionary<long, UserSearchState> _searchStates = new();
+    private static readonly Dictionary<long, (int Id, string VideoId)> _pendingUpdate = new(); // для збереження стану оновлення
 
     static async Task Main()
     {
@@ -44,6 +45,15 @@ class Program
         if (update.Message?.Text is string msg)
         {
             long chatId = update.Message.Chat.Id;
+
+            // Якщо користувач в режимі оновлення назви
+            if (_pendingUpdate.ContainsKey(chatId))
+            {
+                var (id, videoId) = _pendingUpdate[chatId];
+                _pendingUpdate.Remove(chatId);
+                await UpdateFavoriteTitle(chatId, id, videoId, msg, ct);
+                return;
+            }
 
             if (msg == "/start")
             {
@@ -86,7 +96,6 @@ class Program
             string url = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(query)}";
             string json = await http.GetStringAsync(url);
 
-            // 👇 ФІКС: відсіюємо null videoId та album/playlist
             var allResults = JsonConvert.DeserializeObject<Class1[]>(json);
             var songs = allResults
                 .Where(s => !string.IsNullOrEmpty(s.videoId) && s.resultType == "song")
@@ -215,6 +224,19 @@ class Program
         {
             await bot.SendMessage(chatId, "Добре! Якщо захочете, можете знайти схожі через меню.", cancellationToken: ct);
         }
+        else if (data.StartsWith("update_"))
+        {
+            var parts = data.Split('_');
+            int id = int.Parse(parts[1]);
+            string videoId = parts[2];
+            _pendingUpdate[chatId] = (id, videoId);
+            await bot.SendMessage(chatId, "Введіть нову назву для пісні:", cancellationToken: ct);
+        }
+        else if (data.StartsWith("favdetails_"))
+        {
+            int id = int.Parse(data.Replace("favdetails_", ""));
+            await ShowFavoriteDetails(chatId, id, ct);
+        }
         else if (data.StartsWith("remove_"))
         {
             int id = int.Parse(data.Replace("remove_", ""));
@@ -288,7 +310,6 @@ class Program
         var favorite = new { videoId, title, artist };
 
         var request = new HttpRequestMessage(HttpMethod.Post, favoritesApiUrl);
-        // 👇 ФІКС: змінив X-UserId на userId (щоб API бачило)
         request.Headers.Add("userId", chatId.ToString());
         request.Content = new StringContent(JsonConvert.SerializeObject(favorite), Encoding.UTF8, "application/json");
 
@@ -373,7 +394,6 @@ class Program
     private static async Task ShowFavorites(long chatId, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, favoritesApiUrl);
-        // 👇 ФІКС: змінив X-UserId на userId
         request.Headers.Add("userId", chatId.ToString());
 
         var response = await http.SendAsync(request);
@@ -405,6 +425,8 @@ class Program
             keyboard.Add(new List<InlineKeyboardButton>
             {
                 InlineKeyboardButton.WithUrl($"🎧 {artist} - {title}", $"https://youtu.be/{videoId}"),
+                InlineKeyboardButton.WithCallbackData("📄 Деталі", $"favdetails_{id}"),
+                InlineKeyboardButton.WithCallbackData("✏ Оновити", $"update_{id}_{videoId}"),
                 InlineKeyboardButton.WithCallbackData("❌", $"remove_{id}")
             });
         }
@@ -412,10 +434,53 @@ class Program
         await bot.SendMessage(chatId, "⭐ Ваші улюблені пісні:", replyMarkup: new InlineKeyboardMarkup(keyboard), cancellationToken: ct);
     }
 
+    private static async Task ShowFavoriteDetails(long chatId, int id, CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, $"{favoritesApiUrl}/{id}");
+        request.Headers.Add("userId", chatId.ToString());
+        var response = await http.SendAsync(request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            await bot.SendMessage(chatId, "Не вдалося отримати деталі.", cancellationToken: ct);
+            return;
+        }
+
+        string json = await response.Content.ReadAsStringAsync();
+        var song = JsonConvert.DeserializeObject<JObject>(json);
+
+        string title = song["title"]?.ToString();
+        string artist = song["artist"]?.ToString();
+        string videoId = song["videoId"]?.ToString();
+
+        string message = $"📌 *{artist} - {title}*\n\n🔗 [Посилання](https://youtu.be/{videoId})";
+        await bot.SendMessage(chatId, message, parseMode: ParseMode.Markdown, cancellationToken: ct);
+    }
+
+    private static async Task UpdateFavoriteTitle(long chatId, int id, string videoId, string newTitle, CancellationToken ct)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Put, $"{favoritesApiUrl}/{id}");
+        request.Headers.Add("userId", chatId.ToString());
+
+        var song = new { id, videoId, title = newTitle, artist = "Оновлено" };
+        request.Content = new StringContent(JsonConvert.SerializeObject(song), Encoding.UTF8, "application/json");
+
+        var response = await http.SendAsync(request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            await bot.SendMessage(chatId, "✅ Назву оновлено!", cancellationToken: ct);
+            await ShowFavorites(chatId, ct);
+        }
+        else
+        {
+            await bot.SendMessage(chatId, $"❌ Помилка: {response.StatusCode}", cancellationToken: ct);
+        }
+    }
+
     private static async Task RemoveFromFavorites(long chatId, int id, CancellationToken ct)
     {
         var request = new HttpRequestMessage(HttpMethod.Delete, $"{favoritesApiUrl}/{id}");
-        // 👇 ФІКС: змінив X-UserId на userId
         request.Headers.Add("userId", chatId.ToString());
 
         var response = await http.SendAsync(request);
