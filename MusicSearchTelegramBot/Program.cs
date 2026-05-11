@@ -418,7 +418,8 @@ class Program
         var request = new HttpRequestMessage(HttpMethod.Put, $"{favoritesApiUrl}/{id}");
         request.Headers.Add("userId", chatId.ToString());
 
-        var song = new { id, videoId, title = newTitle };
+        // Передаємо artist як пустий рядок (API прийме)
+        var song = new { id, videoId, title = newTitle, artist = "" };
         request.Content = new StringContent(JsonConvert.SerializeObject(song), Encoding.UTF8, "application/json");
 
         var response = await http.SendAsync(request);
