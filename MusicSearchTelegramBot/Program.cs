@@ -22,7 +22,7 @@ class Program
     private static readonly string favoritesApiUrl = "https://musicsearchbotapi-production.up.railway.app/api/favorites";
 
     private static readonly Dictionary<long, UserSearchState> _searchStates = new();
-    private static readonly Dictionary<long, (int Id, string VideoId)> _pendingUpdate = new(); // для збереження стану оновлення
+    private static readonly Dictionary<long, (int Id, string VideoId)> _pendingUpdate = new();
 
     static async Task Main()
     {
@@ -46,12 +46,23 @@ class Program
         {
             long chatId = update.Message.Chat.Id;
 
-            // Якщо користувач в режимі оновлення назви
             if (_pendingUpdate.ContainsKey(chatId))
             {
                 var (id, videoId) = _pendingUpdate[chatId];
                 _pendingUpdate.Remove(chatId);
                 await UpdateFavoriteTitle(chatId, id, videoId, msg, ct);
+                return;
+            }
+
+            // Обробка відповідей на питання про схожі треки
+            if (msg == "✅ Так")
+            {
+                await bot.SendMessage(chatId, "Введіть назву пісні або виконавця для пошуку схожих:", cancellationToken: ct);
+                return;
+            }
+            else if (msg == "❌ Ні")
+            {
+                await bot.SendMessage(chatId, "Добре! Для пошуку музики використовуйте 🔍 Пошук музики.", cancellationToken: ct);
                 return;
             }
 
@@ -213,17 +224,6 @@ class Program
                 }
             }
         }
-        else if (data.StartsWith("related_yes_"))
-        {
-            var parts = data.Split('_');
-            string videoId = parts[2];
-            string title = string.Join("_", parts.Skip(3));
-            await ShowRelated(chatId, videoId, title, ct);
-        }
-        else if (data == "related_no")
-        {
-            await bot.SendMessage(chatId, "Добре! Якщо захочете, можете знайти схожі через меню.", cancellationToken: ct);
-        }
         else if (data.StartsWith("update_"))
         {
             var parts = data.Split('_');
@@ -318,76 +318,17 @@ class Program
         if (response.IsSuccessStatusCode)
         {
             await bot.SendMessage(chatId, $"✅ {artist} - {title}", cancellationToken: ct);
-            await AskForRelated(chatId, videoId, title, ct);
+            // Змінено: тепер використовуємо ReplyKeyboardMarkup замість InlineKeyboardMarkup
+            var keyboard = new ReplyKeyboardMarkup(new[] { new KeyboardButton[] { "✅ Так", "❌ Ні" } })
+            {
+                ResizeKeyboard = true,
+                OneTimeKeyboard = true
+            };
+            await bot.SendMessage(chatId, $"🎵 Пісня \"{title}\" додана!\n\nБажаєте знайти схожі треки?", replyMarkup: keyboard, cancellationToken: ct);
         }
         else
         {
             await bot.SendMessage(chatId, $"❌ Помилка: {response.StatusCode}", cancellationToken: ct);
-        }
-    }
-
-    private static async Task AskForRelated(long chatId, string videoId, string title, CancellationToken ct)
-    {
-        var keyboard = new InlineKeyboardMarkup(new[]
-        {
-            new[]
-            {
-                InlineKeyboardButton.WithCallbackData("✅ Так", $"related_yes_{videoId}_{title}"),
-                InlineKeyboardButton.WithCallbackData("❌ Ні", "related_no")
-            }
-        });
-
-        await bot.SendMessage(chatId, $"🎵 Пісня \"{title}\" додана!\n\nБажаєте знайти схожі треки?", replyMarkup: keyboard, cancellationToken: ct);
-    }
-
-    private static async Task ShowRelated(long chatId, string videoId, string title, CancellationToken ct)
-    {
-        try
-        {
-            await bot.SendChatAction(chatId, ChatAction.Typing, cancellationToken: ct);
-
-            string relatedUrl = $"{apiBaseUrl}/search?query={Uri.EscapeDataString(title + " official music video")}";
-            string relatedJson = await http.GetStringAsync(relatedUrl);
-
-            var allResults = JsonConvert.DeserializeObject<Class1[]>(relatedJson);
-            var relatedSongs = allResults
-                .Where(s => !string.IsNullOrEmpty(s.videoId) && s.resultType == "song")
-                .ToArray();
-
-            if (relatedSongs == null || relatedSongs.Length == 0)
-            {
-                await bot.SendMessage(chatId, "Не знайдено схожих треків.", cancellationToken: ct);
-                return;
-            }
-
-            string message = $"🎵 Схожі треки до \"{title}\":\n\n";
-            var inlineKeyboard = new List<List<InlineKeyboardButton>>();
-
-            for (int i = 0; i < Math.Min(5, relatedSongs.Length); i++)
-            {
-                var song = relatedSongs[i];
-                string songTitle = song.title ?? "Невідомо";
-                string songArtist = song.artists?[0]?.name ?? "Невідомий";
-                string songVideoId = song.videoId;
-
-                message += $"{i + 1}. {songArtist} - {songTitle}\n";
-
-                if (!string.IsNullOrEmpty(songVideoId))
-                {
-                    var row = new List<InlineKeyboardButton>
-                    {
-                        InlineKeyboardButton.WithUrl($"🎧 Слухати", $"https://youtu.be/{songVideoId}"),
-                        InlineKeyboardButton.WithCallbackData("⭐ Додати", $"add_{songVideoId}")
-                    };
-                    inlineKeyboard.Add(row);
-                }
-            }
-
-            await bot.SendMessage(chatId, message, replyMarkup: new InlineKeyboardMarkup(inlineKeyboard), cancellationToken: ct);
-        }
-        catch (Exception ex)
-        {
-            await bot.SendMessage(chatId, $"Помилка пошуку схожих треків: {ex.Message}", cancellationToken: ct);
         }
     }
 
@@ -462,14 +403,15 @@ class Program
         var request = new HttpRequestMessage(HttpMethod.Put, $"{favoritesApiUrl}/{id}");
         request.Headers.Add("userId", chatId.ToString());
 
-        var song = new { id, videoId, title = newTitle, artist = "Оновлено" };
+        // Виправлено: прибрано "Оновлено"
+        var song = new { id, videoId, title = newTitle };
         request.Content = new StringContent(JsonConvert.SerializeObject(song), Encoding.UTF8, "application/json");
 
         var response = await http.SendAsync(request);
 
         if (response.IsSuccessStatusCode)
         {
-            await bot.SendMessage(chatId, "✅ Назву оновлено!", cancellationToken: ct);
+            await bot.SendMessage(chatId, $"✅ Назву змінено на \"{newTitle}\"", cancellationToken: ct);
             await ShowFavorites(chatId, ct);
         }
         else
