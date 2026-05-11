@@ -58,11 +58,26 @@ class Program
             if (msg == "✅ Так")
             {
                 await bot.SendMessage(chatId, "Введіть назву пісні або виконавця для пошуку схожих:", cancellationToken: ct);
+                // Повертаємо головне меню
+                var keyboard = new ReplyKeyboardMarkup(new[]
+                {
+                    new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
+                    new KeyboardButton[] { "📋 Допомога" }
+                })
+                { ResizeKeyboard = true };
+                await bot.SendMessage(chatId, "Головне меню:", replyMarkup: keyboard, cancellationToken: ct);
                 return;
             }
             else if (msg == "❌ Ні")
             {
-                await bot.SendMessage(chatId, "Добре! Для пошуку музики використовуйте 🔍 Пошук музики.", cancellationToken: ct);
+                // Повертаємо головне меню
+                var keyboard = new ReplyKeyboardMarkup(new[]
+                {
+                    new KeyboardButton[] { "🔍 Пошук музики", "⭐ Мої улюблені" },
+                    new KeyboardButton[] { "📋 Допомога" }
+                })
+                { ResizeKeyboard = true };
+                await bot.SendMessage(chatId, "Головне меню:", replyMarkup: keyboard, cancellationToken: ct);
                 return;
             }
 
@@ -318,7 +333,7 @@ class Program
         if (response.IsSuccessStatusCode)
         {
             await bot.SendMessage(chatId, $"✅ {artist} - {title}", cancellationToken: ct);
-            // Змінено: тепер використовуємо ReplyKeyboardMarkup замість InlineKeyboardMarkup
+            // Питаємо про схожі треки
             var keyboard = new ReplyKeyboardMarkup(new[] { new KeyboardButton[] { "✅ Так", "❌ Ні" } })
             {
                 ResizeKeyboard = true,
