@@ -418,7 +418,6 @@ class Program
         var request = new HttpRequestMessage(HttpMethod.Put, $"{favoritesApiUrl}/{id}");
         request.Headers.Add("userId", chatId.ToString());
 
-        // Виправлено: прибрано "Оновлено"
         var song = new { id, videoId, title = newTitle };
         request.Content = new StringContent(JsonConvert.SerializeObject(song), Encoding.UTF8, "application/json");
 
@@ -431,7 +430,8 @@ class Program
         }
         else
         {
-            await bot.SendMessage(chatId, $"❌ Помилка: {response.StatusCode}", cancellationToken: ct);
+            string error = await response.Content.ReadAsStringAsync();
+            await bot.SendMessage(chatId, $"❌ Помилка: {response.StatusCode} - {error}", cancellationToken: ct);
         }
     }
 
